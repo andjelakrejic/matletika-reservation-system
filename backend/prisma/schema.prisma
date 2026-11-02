@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  PROFESSOR
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum SchoolLevel {
+  PRIMARY
+  SECONDARY
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(STUDENT)
+  pushToken String?
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+model Availability {
+  id        Int    @id @default(autoincrement())
+  weekday   Int    // 0 = nedelja ... 6 = subota
+  startTime String // "16:00"
+  endTime   String // "20:00"
+}
+
+model TimeOff {
+  id      Int      @id @default(autoincrement())
+  startAt DateTime
+  endAt   DateTime
+}
+
+model Booking {
+  id          Int           @id @default(autoincrement())
+  student     User?         @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  studentId   Int?
+  guestName   String?
+  startAt     DateTime
+  endAt       DateTime
+  hours       Int
+  price       Int
+  status      BookingStatus @default(PENDING)
+  schoolLevel SchoolLevel?
+  grade       Int?
+  topics      String[]
+  note        String?
+  createdBy   Role          @default(STUDENT)
+  createdAt   DateTime      @default(now())
+
+  @@index([startAt])
+}
