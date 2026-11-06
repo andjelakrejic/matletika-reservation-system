@@ -49,3 +49,4 @@ example
 
 # backend
 backend/src/generated
+backend/src/users

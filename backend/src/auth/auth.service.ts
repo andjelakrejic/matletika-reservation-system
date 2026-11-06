@@ -9,9 +9,9 @@ import bcrypt from 'bcrypt'
 export class AuthService {
     constructor(private prisma: PrismaService, private jwt: JwtService) {}
 
-    private issueToken(user: {id: number; name: string; email: string; role: string}) {
+    private issueToken(user: {id: number; firstName: string; lastName: string; email: string; role: string}) {
         const token = this.jwt.sign({sub: user.id, role: user.role});
-        return { token, user: {id: user.id, name: user.name, email: user.email, role: user.role}}
+        return { token, user: {id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role}}
     }
 
     async register (dto: RegisterDto) {
@@ -21,7 +21,8 @@ export class AuthService {
 
         const user = await this.prisma.user.create({
             data: {
-                name: dto.name,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
                 email,
                 password: await bcrypt.hash(dto.password, 10)
             }
