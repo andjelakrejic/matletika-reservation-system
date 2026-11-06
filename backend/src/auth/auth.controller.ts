@@ -18,14 +18,4 @@ export class AuthController {
     login(@Body() dto: LoginDto) {
         return this.auth.login(dto);
     }
-
-    @UseGuards(JwtAuthGuard)
-    @Get('me')
-    me(@Req() req: any) {
-        return this.prisma.user.findUnique({
-            where: {id: req.user.id},
-            select: {id: true, firstName: true, lastName: true, email: true, role: true},
-        });
-    }
-
 }
