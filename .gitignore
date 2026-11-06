@@ -47,5 +47,5 @@ example
 /ios
 /android
 
-dist/
-.expo/
+# backend
+backend/src/generated
