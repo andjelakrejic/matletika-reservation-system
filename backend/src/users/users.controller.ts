@@ -24,7 +24,7 @@ export class UsersController {
         return this.users.changePassword(req.user.id, dto);
     }
 
-    @Get('bookings')
+    @Get('getBookings')
     getBookings(@Req() req: any, @Query('when') when: 'upcoming' | 'past' | 'all' = 'all') {
         return this.users.getBookings(req.user.id, when);
     }
