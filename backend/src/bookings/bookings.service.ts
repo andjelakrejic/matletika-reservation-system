@@ -4,7 +4,7 @@ import { SlotsService } from "../slots/slots.service.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { DateTime } from 'luxon'
 import { CANCEL_DEADLINE_MS, CAPACITY, MAX_HOURS_PER_DAY, PRICE_PER_HOUR, TIMEZONE } from "../config.js";
-import { CreateBookingDto } from "./dtos.js";
+import { CreateBookingDto, ManualBookingDto } from "./dtos.js";
 
 
 @Injectable()
@@ -102,6 +102,39 @@ export class BookingsService {
         if (booking.status === 'CANCELLED') return booking;
 
         return this.prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } });
+    }
+
+    async createManual(dto: ManualBookingDto) {
+        if (!dto.studentId && !dto.guestName)
+            throw new BadRequestException('Unesi studentId ili guestName');
+        if (dto.studentId && !(await this.prisma.user.findUnique({ where: { id: dto.studentId } })))
+            throw new BadRequestException('Učenik ne postoji');
+
+        const start = DateTime.fromISO(dto.startAt, { zone: TIMEZONE });
+        if (!start.isValid || start.minute !== 0 || start.second !== 0)
+            throw new BadRequestException('Termin mora počinjati na pun sat');
+        const lockKey = Math.floor(start.startOf('day').toMillis() / 86_400_000);
+
+        return this.prisma.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
+            await this.assertCapacity(tx, start, dto.hours);
+            return tx.booking.create({
+            data: {
+                studentId: dto.studentId,
+                guestName: dto.guestName,
+                startAt: start.toJSDate(),
+                endAt: start.plus({ hours: dto.hours }).toJSDate(),
+                hours: dto.hours,
+                price: dto.hours * PRICE_PER_HOUR,
+                schoolLevel: dto.schoolLevel,
+                grade: dto.grade,
+                topics: dto.topics ?? [],
+                note: dto.note,
+                createdBy: 'PROFESSOR',
+                status: 'CONFIRMED',
+            },
+            });
+        });
     }
 
 }
