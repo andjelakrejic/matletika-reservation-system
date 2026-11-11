@@ -3,7 +3,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { SlotsService } from "../slots/slots.service.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { DateTime } from 'luxon'
-import { CANCEL_DEADLINE_MS, CAPACITY, MAX_HOURS_PER_DAY, PRICE_PER_HOUR, TIMEZONE } from "../config.js";
+import { CANCEL_DEADLINE_MS, CAPACITY, MAX_HOURS_PER_DAY, PRICE_PER_HOUR, SLOT_MINUTES, TIMEZONE } from "../config.js";
 import { CreateBookingDto, ManualBookingDto } from "./dtos.js";
 
 
@@ -13,16 +13,17 @@ export class BookingsService {
     constructor(private prisma: PrismaService, private slots: SlotsService) {}
 
     private async assertCapacity(tx: Prisma.TransactionClient, start: DateTime, hours: number) { // proverava da li u svakom satu trazenog termina ima slobodnih mesta 
-        for (let i = 0; i < hours; i++) {
-            const hs = start.plus({ hours: i });
-            const taken = await tx.booking.count({ // broj zauzetih mesta 
+        const blocks = hours * (60 / SLOT_MINUTES);
+        for (let i = 0; i < blocks; i++) {
+            const bs = start.plus({ minutes: SLOT_MINUTES * i });
+            const taken = await tx.booking.count({
                 where: {
-                    status: { not: 'CANCELLED' },
-                    startAt: { lt: hs.plus({ hours: 1 }).toJSDate() },
-                    endAt: { gt: hs.toJSDate() }
-                }
+                status: { not: 'CANCELLED' },
+                startAt: { lt: bs.plus({ minutes: SLOT_MINUTES }).toJSDate() },
+                endAt: { gt: bs.toJSDate() },
+                },
             });
-            if (taken >= CAPACITY) throw new ConflictException('This slot is already full.');
+            if (taken >= CAPACITY) throw new ConflictException('Termin je pun');
         }
     }
 
@@ -30,17 +31,15 @@ export class BookingsService {
         const start = DateTime.fromISO(dto.startAt, { zone: TIMEZONE });
 
         // ovo treba u frontu da se ne omoguci
-        if (!start.isValid || start.minute !== 0 || start.second !== 0)
-            throw new BadRequestException('The reservation has to start in the full hour');
+        if (!start.isValid || ![0, 30].includes(start.minute) || start.second !== 0)
+            throw new BadRequestException('The reservation has to start in the full hour or half hour.');
         if (dto.schoolLevel === 'SECONDARY' && dto.grade > 4)
             throw new BadRequestException('Secondary school has grades 1-4');
 
         // provera da svaki trazeni sat postoji u ponudi (ne sme da bude u proslosti :| )
-        const offeredHours = new Set((await this.slots.forDate(start.toFormat('yyyy-MM-dd'))).map((s) => s.startAt));
-        for (let i = 0; i < dto.hours; i++) {
-            if (!offeredHours.has(start.plus({ hours: i}).toUTC().toISO()!))
-                throw new BadRequestException("This reservation time isn't available.")
-        }
+        const slot = (await this.slots.forDate(start.toFormat('yyyy-MM-dd')))
+            .find((s) => s.startAt === start.toUTC().toISO());
+        if (!slot || slot.maxHours < dto.hours) throw new BadRequestException('This reservation time is not available.');
 
         const end = start.plus({ hours: dto.hours });
         const dayStart = start.startOf('day');

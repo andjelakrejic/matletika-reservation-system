@@ -2,8 +2,11 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DateTime } from 'luxon';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CAPACITY, TIMEZONE } from '../config.js';
+import { AvailabilityItemDto, CreateTimeOffDto } from './dtos.js';
 
 const STUDENT_SELECT = { id: true, firstName: true, lastName: true, email: true } as const;
+
+// deleteAccount
 
 @Injectable()
 export class AdminService {
@@ -43,8 +46,8 @@ export class AdminService {
 
     const byHour = new Map<string, { hour: string; startAt: string; capacity: number; entries: unknown[] }>();
     for (const b of bookings) {
-      for (let i = 0; i < b.hours; i++) {
-        const hs = DateTime.fromJSDate(b.startAt, { zone: TIMEZONE }).plus({ hours: i });
+      for (let i = 0; i < b.hours * 2; i++) {
+        const hs = DateTime.fromJSDate(b.startAt, { zone: TIMEZONE }).plus({ minutes: 30 * i });
         const key = hs.toUTC().toISO()!;
         if (!byHour.has(key))
           byHour.set(key, { hour: hs.toFormat('HH:mm'), startAt: key, capacity: CAPACITY, entries: [] });
@@ -61,4 +64,52 @@ export class AdminService {
     }
     return [...byHour.values()].sort((a, b) => a.startAt.localeCompare(b.startAt));
   }
+
+  getAvailability() {
+    return this.prisma.availability.findMany({ orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }] });
+  }
+
+  // Zamenjuje celo radno vreme novom listom
+  async setAvailability(items: AvailabilityItemDto[]) {
+    const byDay = new Map<number, AvailabilityItemDto[]>();
+    for (const i of items) {
+      if (i.startTime >= i.endTime) throw new BadRequestException('The start has to be before the end.');
+      byDay.set(i.weekday, [...(byDay.get(i.weekday) ?? []), i]);
+    }
+    for (const list of byDay.values()) {
+      list.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      for (let k = 1; k < list.length; k++)
+        if (list[k].startTime < list[k - 1].endTime) throw new BadRequestException('The reservations are overlapping.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.availability.deleteMany(),
+      this.prisma.availability.createMany({ data: items }),
+    ]);
+    return this.getAvailability();
+  }
+
+  getTimeOff() {
+    return this.prisma.timeOff.findMany({ where: { endAt: { gt: new Date() } }, orderBy: { startAt: 'asc' } });
+  }
+
+  async createTimeOff(dto: CreateTimeOffDto) {
+    const startAt = new Date(dto.startAt);
+    const endAt = new Date(dto.endAt);
+    if (!(startAt < endAt)) throw new BadRequestException('The start has to be before the end.');
+
+    const timeOff = await this.prisma.timeOff.create({ data: { startAt, endAt } });
+    // rezervacije koje već postoje u tom periodu se ne otkazuju same, profesorka ih otkazuje ručno
+    const affectedBookings = await this.prisma.booking.count({
+      where: { status: { not: 'CANCELLED' }, startAt: { lt: endAt }, endAt: { gt: startAt } },
+    });
+    return { timeOff, affectedBookings };
+  }
+
+  async deleteTimeOff(id: number) {
+    const { count } = await this.prisma.timeOff.deleteMany({ where: { id } });
+    if (count === 0) throw new NotFoundException("This day for time off doesn't exist.");
+    return { ok: true };
+  }
+
 }
