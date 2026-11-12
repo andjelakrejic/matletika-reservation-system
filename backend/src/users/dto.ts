@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
 
 export class UpdateProfileDto {
@@ -10,4 +10,12 @@ export class ChangePasswordDto {
     @IsString() currentPassword!: string;
     @IsString() @MinLength(8) @MaxLength(100) newPassword!: string;
     @IsString() confirmPassword!: string;
+}
+
+export class DeleteAccountDto {
+    @IsString() password!: string;
+}
+
+export class PushTokenDto {
+    @Matches(/^Expo(nent)?PushToken\[.+\]$/) token!: string;
 }

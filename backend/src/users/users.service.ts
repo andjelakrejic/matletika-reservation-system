@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { ChangePasswordDto, UpdateProfileDto } from "./dto.js";
 import bcrypt from 'bcrypt'
@@ -64,5 +64,31 @@ export class UsersService {
                 startAt: when === 'upcoming' ? 'asc' : 'desc' 
             },
         });
+    }
+
+    async deleteAccont(id: number, password: string) {
+        const user = await this.prisma.user.findUniqueOrThrow({ where: {id} });
+
+        if (user.role === "PROFESSOR") throw new ForbiddenException("The professor account cannot be deleted here.");
+        if (!(await bcrypt.compare(password, user.password)))
+            throw new BadRequestException('The password is incorrect.');
+
+        // The incoming bookings are automatically cancelled since the account has been deleted
+        await this.prisma.$transaction([ // if one operation fails, rollback happens (omogucava atomicne operacije)
+            this.prisma.booking.updateMany({
+                where: { studentId: id, status: {not: 'CANCELLED'}, startAt: { gt: new Date() } },
+                data: { status: 'CANCELLED' }
+            }),
+            this.prisma.user.delete({ where: {id} })
+        ]);
+        return { ok: true };
+    }
+
+    setPushToken(id: number, token: string | null) {
+        return this.prisma.user.update({
+            where: { id },
+            data: { pushToken: token },
+            select: { id: true }
+        })
     }
 }
