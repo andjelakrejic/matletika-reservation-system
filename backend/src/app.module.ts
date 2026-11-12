@@ -8,6 +8,7 @@ import { UserModule } from './users/users.module.js';
 import { SlotsModule } from './slots/slots.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { AdminModule } from './admin/admin.module.js';
     UserModule,
     SlotsModule,
     BookingsModule,
-    AdminModule
+    AdminModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

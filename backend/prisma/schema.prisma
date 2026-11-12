@@ -54,21 +54,22 @@ model TimeOff {
 }
 
 model Booking {
-  id          Int           @id @default(autoincrement())
-  student     User?         @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  studentId   Int?
-  guestName   String?
-  startAt     DateTime
-  endAt       DateTime
-  hours       Int
-  price       Int
-  status      BookingStatus @default(PENDING)
-  schoolLevel SchoolLevel?
-  grade       Int?
-  topics      String[]
-  note        String?
-  createdBy   Role          @default(STUDENT)
-  createdAt   DateTime      @default(now())
+  id              Int           @id @default(autoincrement())
+  student         User?         @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  studentId       Int?
+  guestName       String?
+  startAt         DateTime
+  endAt           DateTime
+  hours           Int
+  price           Int
+  status          BookingStatus @default(PENDING)
+  schoolLevel     SchoolLevel?
+  grade           Int?
+  topics          String[]
+  note            String?
+  createdBy       Role          @default(STUDENT)
+  createdAt       DateTime      @default(now())
+  reminderSentAt  DateTime?
 
   @@index([startAt])
 }

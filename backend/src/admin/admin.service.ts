@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CAPACITY, TIMEZONE } from '../config.js';
 import { AvailabilityItemDto, CreateTimeOffDto } from './dtos.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 const STUDENT_SELECT = { id: true, firstName: true, lastName: true, email: true } as const;
 
@@ -10,7 +11,7 @@ const STUDENT_SELECT = { id: true, firstName: true, lastName: true, email: true 
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private notifications: NotificationsService) {}
 
   getAllBookings(status?: string) {
     if (status && !['PENDING', 'CONFIRMED', 'CANCELLED'].includes(status))
@@ -23,11 +24,27 @@ export class AdminService {
   }
 
   async setBookingStatus(id: number, status: 'CONFIRMED' | 'CANCELLED') {
-    const booking = await this.prisma.booking.findUnique({ where: { id } });
-    if (!booking) throw new NotFoundException("This reservation doesn't exist");
+     const booking = await this.prisma.booking.findUnique({ where: { id } });
+    if (!booking) throw new NotFoundException('Booking not found');
     if (status === 'CONFIRMED' && booking.status !== 'PENDING')
-      throw new BadRequestException("You can only accept a pending reservation");
-    return this.prisma.booking.update({ where: { id }, data: { status } });
+      throw new BadRequestException('Only a pending booking can be confirmed');
+
+    const { student, ...updated } = await this.prisma.booking.update({
+      where: { id },
+      data: { status },
+      include: { student: { select: { id: true, pushToken: true } } },
+    });
+
+    if (student) {
+      const when = DateTime.fromJSDate(updated.startAt, { zone: TIMEZONE }).toFormat('dd.MM. HH:mm');
+      await this.notifications.send(
+        student,
+        status === 'CONFIRMED' ? 'Booking confirmed' : 'Booking denied',
+        when,
+        { bookingId: id },
+      );
+    }
+    return updated;
   }
 
   async getSchedule(date: string) {

@@ -5,12 +5,13 @@ import { Prisma } from "../generated/prisma/client.js";
 import { DateTime } from 'luxon'
 import { CANCEL_DEADLINE_MS, CAPACITY, MAX_HOURS_PER_DAY, PRICE_PER_HOUR, SLOT_MINUTES, TIMEZONE } from "../config.js";
 import { CreateBookingDto, ManualBookingDto } from "./dtos.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 
 
 @Injectable()
 export class BookingsService {
 
-    constructor(private prisma: PrismaService, private slots: SlotsService) {}
+    constructor(private prisma: PrismaService, private slots: SlotsService, private notifications: NotificationsService) {}
 
     private async assertCapacity(tx: Prisma.TransactionClient, start: DateTime, hours: number) { // proverava da li u svakom satu trazenog termina ima slobodnih mesta 
         const blocks = hours * (60 / SLOT_MINUTES);
@@ -91,16 +92,27 @@ export class BookingsService {
 
     async cancel(user: { id: number; role: 'STUDENT' | 'PROFESSOR' }, bookingId: number) {
         const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
-        if (!booking) throw new NotFoundException('This reservation does not exist.');
+        if (!booking) throw new NotFoundException('Booking not found');
 
         if (user.role === 'STUDENT') {
-        if (booking.studentId !== user.id) throw new ForbiddenException();
-        if (booking.startAt.getTime() - Date.now() < CANCEL_DEADLINE_MS)
-            throw new ForbiddenException('You can only cancel up to 2h before your class.');
+            if (booking.studentId !== user.id) throw new ForbiddenException();
+            if (booking.startAt.getTime() - Date.now() < CANCEL_DEADLINE_MS)
+            throw new ForbiddenException('Cancellation is only possible at least 6 hours before the booking');
         }
         if (booking.status === 'CANCELLED') return booking;
 
-        return this.prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } });
+        const { student, ...updated } = await this.prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: 'CANCELLED' },
+            include: { student: { select: { id: true, pushToken: true } } },
+        });
+
+        // Tell the student when the professor cancelled their booking
+        if (user.role === 'PROFESSOR' && student) {
+            const when = DateTime.fromJSDate(updated.startAt, { zone: TIMEZONE }).toFormat('dd.MM. HH:mm');
+            await this.notifications.send(student, 'Booking cancelled', when, { bookingId });
+        }
+        return updated;
     }
 
     async createManualBooking(dto: ManualBookingDto) {
