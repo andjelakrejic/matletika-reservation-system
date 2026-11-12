@@ -103,15 +103,15 @@ export class BookingsService {
         return this.prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } });
     }
 
-    async createManual(dto: ManualBookingDto) {
+    async createManualBooking(dto: ManualBookingDto) {
         if (!dto.studentId && !dto.guestName)
-            throw new BadRequestException('Unesi studentId ili guestName');
+            throw new BadRequestException('Input student id or guest name');
         if (dto.studentId && !(await this.prisma.user.findUnique({ where: { id: dto.studentId } })))
-            throw new BadRequestException('Učenik ne postoji');
+            throw new BadRequestException('This student does not exist');
 
         const start = DateTime.fromISO(dto.startAt, { zone: TIMEZONE });
         if (!start.isValid || start.minute !== 0 || start.second !== 0)
-            throw new BadRequestException('Termin mora počinjati na pun sat');
+            throw new BadRequestException('Termin mora počinjati na pun sat'); // pazi - sad je na pola sata
         const lockKey = Math.floor(start.startOf('day').toMillis() / 86_400_000);
 
         return this.prisma.$transaction(async (tx) => {

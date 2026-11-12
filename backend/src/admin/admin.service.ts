@@ -22,7 +22,7 @@ export class AdminService {
     });
   }
 
-  async setStatus(id: number, status: 'CONFIRMED' | 'CANCELLED') {
+  async setBookingStatus(id: number, status: 'CONFIRMED' | 'CANCELLED') {
     const booking = await this.prisma.booking.findUnique({ where: { id } });
     if (!booking) throw new NotFoundException("This reservation doesn't exist");
     if (status === 'CONFIRMED' && booking.status !== 'PENDING')

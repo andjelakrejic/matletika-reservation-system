@@ -24,7 +24,7 @@ Repo je jedan (monorepo): `backend/` i `frontend/`.
 - Svako rezerviše **sa svog naloga, jedno mesto**. Ne može da ima dve rezervacije koje se preklapaju.
 - Nova rezervacija ide u **PENDING**, profesorka je **ručno potvrđuje ili odbija**.
 - Aktivne rezervacije (**PENDING** i **CONFIRMED**) zauzimaju mesto. **CANCELLED** oslobađa mesto.
-- Učenik otkazuje **najkasnije 2h pre časa**, bez naplate. Posle toga mora da pozove profesorku.
+- Učenik otkazuje **najkasnije 6h pre časa**, bez naplate. Posle toga mora da pozove profesorku.
 - Profesorka **upisuje i otkazuje bilo kad**. Ručno upisane rezervacije idu odmah u CONFIRMED. Učenik može da nema nalog (`guestName`).
 - Pri rezervaciji učenik upisuje **nivo škole (osnovna/srednja), razred (osnovna 1-8, srednja 1-4) i 1-3 oblasti** (slobodan unos), da profesorka pripremi zadatke.
 - Učenik vidi samo broj slobodnih mesta, nikad imena drugih učenika.
@@ -53,18 +53,18 @@ Svi odgovori su JSON. Zaštićene rute traže `Authorization: Bearer <jwt>`.
 | `POST /auth/register` | svi | `{firstName, lastName, email, password}` → `{token, user}` |
 | `POST /auth/login` | svi | `{email, password}` → `{token, user}` |
 | `GET /me` | prijavljen | moji podaci |
-| `PATCH /me` | prijavljen | `{firstName?, lastName?}` |
-| `PATCH /me/password` | prijavljen | `{currentPassword, newPassword, confirmPassword}` |
-| `GET /me/bookings?when=upcoming\|past\|all` | prijavljen | moje rezervacije (prošle uključuju otkazane) |
+| `PATCH /me/updateProfile` | prijavljen | `{firstName?, lastName?}` |
+| `PATCH /me/changePassword` | prijavljen | `{currentPassword, newPassword, confirmPassword}` |
+| `GET /me/getBookings?when=upcoming\|past\|all` | prijavljen | moje rezervacije (prošle uključuju otkazane) |
 | `DELETE /me` | prijavljen | brisanje naloga (**TODO**) |
 | `POST /me/push-token` | prijavljen | čuvanje Expo push tokena (**TODO**) |
 | `GET /slots?date=YYYY-MM-DD` | prijavljen | blokovi od 30 min, vidi ispod |
 | `POST /bookings` | prijavljen | `{startAt, hours, schoolLevel, grade, topics[], note?}` → rezervacija (PENDING) |
 | `DELETE /bookings/:id` | učenik (2h pravilo), profesorka | otkazivanje (status CANCELLED) |
-| `GET /admin/bookings?status=` | profesorka | lista rezervacija, npr. `PENDING` za zahteve |
-| `PATCH /admin/bookings/:id` | profesorka | `{status: "CONFIRMED" \| "CANCELLED"}` |
-| `POST /admin/bookings` | profesorka | ručni upis (`studentId` ili `guestName`), odmah CONFIRMED |
-| `GET /admin/schedule?date=` | profesorka | po bloku od 30 min: ko dolazi, sa razredom i oblastima |
+| `GET /admin/getAllBookings?status=` | profesorka | lista rezervacija, npr. `PENDING` za zahteve |
+| `PATCH /admin/setBookingStatus/:id` | profesorka | `{status: "CONFIRMED" \| "CANCELLED"}` |
+| `POST /admin/createManualBooking` | profesorka | ručni upis (`studentId` ili `guestName`), odmah CONFIRMED |
+| `GET /admin/getSchedule?date=` | profesorka | po bloku od 30 min: ko dolazi, sa razredom i oblastima |
 | `GET/PUT /admin/availability` | profesorka | radno vreme (`{items: [{weekday, startTime, endTime}]}`, PUT zamenjuje sve) |
 | `GET/POST/DELETE /admin/time-off` | profesorka | slobodni dani (`{startAt, endAt}`); POST vraća i broj pogođenih rezervacija |
 

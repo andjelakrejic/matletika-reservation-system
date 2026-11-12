@@ -21,7 +21,7 @@ export class UsersService {
         return this.prisma.user.findUniqueOrThrow({ where: { id }, select: PROFILE_SELECT });
     }
 
-    async update (id: number, dto: UpdateProfileDto) {
+    async updateProfile (id: number, dto: UpdateProfileDto) {
         let data: { firstName?: string, lastName?: string } = {}
 
         if (dto.firstName) data.firstName = dto.firstName;

@@ -15,14 +15,14 @@ export class AdminController {
         return this.admin.getAllBookings(status);
     }
 
-    @Patch('bookings/:id')
-    setStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateStatusDto) {
-        return this.admin.setStatus(id, dto.status);
+    @Patch('setBookingStatus/:id')
+    setBookingStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateStatusDto) {
+        return this.admin.setBookingStatus(id, dto.status);
     }
 
-    @Post('createManual')
+    @Post('createManualBooking')
     createManual(@Body() dto: ManualBookingDto) {
-        return this.bookings.createManual(dto);
+        return this.bookings.createManualBooking(dto);
     }
 
     @Get('getSchedule')
@@ -30,27 +30,27 @@ export class AdminController {
         return this.admin.getSchedule(date);
     }
 
-    @Get('getAvailability')
+    @Get('availability')
     getAvailability() {
         return this.admin.getAvailability();
     }
 
-    @Put('setAvailability')
+    @Put('availability')
     setAvailability(@Body() dto: SetAvailabilityDto) {
         return this.admin.setAvailability(dto.items); 
     }
 
-    @Get('getTimeOff')
+    @Get('time-off')
     getTimeOff() {
         return this.admin.getTimeOff();
     }
     
-    @Post('createTimeOff')
+    @Post('time-off')
     createTimeOff(@Body() dto: CreateTimeOffDto) {
         return this.admin.createTimeOff(dto);
     }
 
-    @Delete('deleteTimeOff/:id')
+    @Delete('time-off/:id')
     deleteTimeOff(@Param('id', ParseIntPipe) id: number) {
         return this.admin.deleteTimeOff(id);
     }

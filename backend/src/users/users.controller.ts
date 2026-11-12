@@ -14,12 +14,12 @@ export class UsersController {
         return this.users.getMe(req.user.id)
     }
 
-    @Patch()
-    update(@Req() req: any, @Body() dto: UpdateProfileDto) {
-        return this.users.update(req.user.id, dto);
+    @Patch('updateProfile')
+    updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
+        return this.users.updateProfile(req.user.id, dto);
     }
 
-    @Patch('password') 
+    @Patch('changePassword') 
     changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
         return this.users.changePassword(req.user.id, dto);
     }
@@ -29,4 +29,5 @@ export class UsersController {
         return this.users.getBookings(req.user.id, when);
     }
 
+    // delete me, push-token
 }
