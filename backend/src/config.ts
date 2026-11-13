@@ -7,4 +7,7 @@ export const CANCEL_DEADLINE_MS = 6 * 60 * 60 * 1000; // ucenik otkazuje najkasn
 
 export const SLOT_MINUTES = 30;
 
+export const RESET_CODE_TTL_MS = 15 * 60_000;   // kod za zaboravljenu lozinku traje 15 min 
+export const RESET_MAX_ATTEMPTS = 5;            // 5 pokusaja
+
 // termin ne mora da pocinje na pun sat - na pola sata 

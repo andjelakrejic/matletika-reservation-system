@@ -38,9 +38,15 @@ export class BookingsService {
             throw new BadRequestException('Secondary school has grades 1-4');
 
         // provera da svaki trazeni sat postoji u ponudi (ne sme da bude u proslosti :| )
-        const slot = (await this.slots.forDate(start.toFormat('yyyy-MM-dd')))
-            .find((s) => s.startAt === start.toUTC().toISO());
-        if (!slot || slot.maxHours < dto.hours) throw new BadRequestException('This reservation time is not available.');
+        // const slot = (await this.slots.forDate(start.toFormat('yyyy-MM-dd')))
+        //     .find((s) => s.startAt === start.toUTC().toISO());
+        // if (!slot || slot.maxHours < dto.hours) throw new BadRequestException('This reservation time is not available.');
+
+        const offered = new Set((await this.slots.forDate(start.toFormat('yyyy-MM-dd'))).map((s) => s.startAt));
+        for (let i = 0; i < dto.hours * 2; i++) {
+        if (!offered.has(start.plus({ minutes: SLOT_MINUTES * i }).toUTC().toISO()!))
+            throw new BadRequestException('Slot is not available');
+        }
 
         const end = start.plus({ hours: dto.hours });
         const dayStart = start.startOf('day');

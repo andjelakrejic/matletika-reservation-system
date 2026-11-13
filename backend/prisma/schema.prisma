@@ -38,6 +38,7 @@ model User {
   pushToken String?
   bookings  Booking[]
   createdAt DateTime  @default(now())
+  passwordResets PasswordReset[]
 }
 
 model Availability {
@@ -72,4 +73,16 @@ model Booking {
   reminderSentAt  DateTime?
 
   @@index([startAt])
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
