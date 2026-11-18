@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module.js';
 import { TIMEZONE } from '../src/config.js';
 import { MailService } from '../src/mail/mail.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { PRICE_PER_HOUR, CANCEL_DEADLINE_MS } from '../src/config.js';
 
 export const PASSWORD = 'Password123!';
 
@@ -140,7 +141,7 @@ export function makeBooking(
       startAt: o.start,
       endAt: new Date(o.start.getTime() + hours * 3_600_000),
       hours,
-      price: hours * 500,
+      price: hours * PRICE_PER_HOUR,
       status: o.status ?? 'CONFIRMED',
       schoolLevel: 'PRIMARY',
       grade: 5,

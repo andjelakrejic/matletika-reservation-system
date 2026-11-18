@@ -37,11 +37,6 @@ export class BookingsService {
         if (dto.schoolLevel === 'SECONDARY' && dto.grade > 4)
             throw new BadRequestException('Secondary school has grades 1-4');
 
-        // provera da svaki trazeni sat postoji u ponudi (ne sme da bude u proslosti :| )
-        // const slot = (await this.slots.forDate(start.toFormat('yyyy-MM-dd')))
-        //     .find((s) => s.startAt === start.toUTC().toISO());
-        // if (!slot || slot.maxHours < dto.hours) throw new BadRequestException('This reservation time is not available.');
-
         const offered = new Set((await this.slots.forDate(start.toFormat('yyyy-MM-dd'))).map((s) => s.startAt));
         for (let i = 0; i < dto.hours * 2; i++) {
         if (!offered.has(start.plus({ minutes: SLOT_MINUTES * i }).toUTC().toISO()!))
@@ -77,8 +72,7 @@ export class BookingsService {
                 },
             });
             if ((agg._sum.hours ?? 0) + dto.hours > MAX_HOURS_PER_DAY)
-                throw new ConflictException(`Maksimum je ${MAX_HOURS_PER_DAY}h po danu`);
-
+                throw new ConflictException(`Maximum is ${MAX_HOURS_PER_DAY}h per day.`);   
             return tx.booking.create({
                 data: {
                 studentId: userId,

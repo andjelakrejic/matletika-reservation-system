@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards.js";
 import { UsersService } from "./users.service.js";
-import { ChangePasswordDto, DeleteAccountDto, UpdateProfileDto } from "./dto.js";
+import { ChangePasswordDto, DeleteAccountDto, PushTokenDto, UpdateProfileDto } from "./dto.js";
 
 @UseGuards(JwtAuthGuard)
 @Controller('me')
@@ -30,13 +30,13 @@ export class UsersController {
     }
 
     @Delete()
-    DeleteAccountDto(@Req() req: any, @Body() dto: DeleteAccountDto) {
+    deleteAccount(@Req() req: any, @Body() dto: DeleteAccountDto) {
         return this.users.deleteAccont(req.user.id, dto.password);
     }
 
     @Post('push-token')
-    setPushToken(@Req() req: any) {
-        return this.users.setPushToken(req.user.id, null);
+    setPushToken(@Req() req: any, @Body() dto: PushTokenDto) {
+    return this.users.setPushToken(req.user.id, dto.token);
     }
 
     @Delete('push-token')

@@ -101,13 +101,13 @@ describe('Push notifications and reminders', () => {
 
     it('notifies the student when the professor confirms', async () => {
       const b = await studentBooks();
-      await http(ctx).patch(`/admin/bookings/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
+      await http(ctx).patch(`/admin/setBookingStatus/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
       expect(sentTo()).toEqual([TOKEN]);
     });
 
     it('notifies the student when the professor rejects', async () => {
       const b = await studentBooks();
-      await http(ctx).patch(`/admin/bookings/${b.id}`).set(auth(prof.token)).send({ status: 'CANCELLED' }).expect(200);
+      await http(ctx).patch(`/admin/setBookingStatus/${b.id}`).set(auth(prof.token)).send({ status: 'CANCELLED' }).expect(200);
       expect(sentTo()).toEqual([TOKEN]);
     });
 
@@ -126,20 +126,20 @@ describe('Push notifications and reminders', () => {
     it('does not notify for guest bookings or students without a token', async () => {
       const noToken = await createUserWithToken(ctx);
       const b = await makeBooking(ctx, { studentId: noToken.user.id, start: day.at('18:00').toJSDate(), status: 'PENDING' });
-      await http(ctx).patch(`/admin/bookings/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
+      await http(ctx).patch(`/admin/setBookingStatus/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('does not fail the request when sending the push fails', async () => {
       fetchMock.mockRejectedValue(new Error('network down'));
       const b = await studentBooks();
-      await http(ctx).patch(`/admin/bookings/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
+      await http(ctx).patch(`/admin/setBookingStatus/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
     });
 
     it('forgets a push token that the device no longer accepts', async () => {
       fetchMock.mockImplementation(async () => notRegisteredTicket());
       const b = await studentBooks();
-      await http(ctx).patch(`/admin/bookings/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
+      await http(ctx).patch(`/admin/setBookingStatus/${b.id}`).set(auth(prof.token)).send({ status: 'CONFIRMED' }).expect(200);
       expect((await ctx.prisma.user.findUniqueOrThrow({ where: { id: student.user.id } })).pushToken).toBeNull();
     });
   });

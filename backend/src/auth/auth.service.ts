@@ -83,7 +83,7 @@ export class AuthService {
     }
 
     async resetPassword(dto: ResetPasswordDto) {
-        if (dto.newPassword !== dto.confirmedPassword) throw new BadRequestException('Passwords do not match');
+        if (dto.newPassword !== dto.confirmPassword) throw new BadRequestException('Passwords do not match');
         const invalid = new BadRequestException('Invalid or expired code');
 
         const user = await this.prisma.user.findUnique({ where: { email: dto.email.toLowerCase() } });

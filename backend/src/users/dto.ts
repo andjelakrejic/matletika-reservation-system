@@ -1,9 +1,12 @@
+import { Transform } from "class-transformer";
 import { IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
 
 export class UpdateProfileDto {
-    @IsOptional() @IsString() @MinLength(2) @MaxLength(20) firstName?: string;
-    @IsOptional() @IsString() @MinLength(2) @MaxLength(20) lastName?: string;
+    @Transform(trim) @IsOptional() @IsString() @MinLength(2) @MaxLength(20) firstName?: string;
+    @Transform(trim) @IsOptional() @IsString() @MinLength(2) @MaxLength(20) lastName?: string;
 }
 
 export class ChangePasswordDto {

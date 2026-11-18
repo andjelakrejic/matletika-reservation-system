@@ -18,16 +18,16 @@ describe('Users / profile', () => {
     await resetDb(ctx.prisma);
   });
 
-  describe('PATCH /me', () => {
+  describe('PATCH /me/updateProfile', () => {
     it('updates and trims first and last name', async () => {
       const { token } = await createUserWithToken(ctx);
-      const res = await http(ctx).patch('/me').set(auth(token)).send({ firstName: '  Mara ', lastName: 'Maric' }).expect(200);
+      const res = await http(ctx).patch('/me/updateProfile').set(auth(token)).send({ firstName: '  Mara ', lastName: 'Maric' }).expect(200);
       expect(res.body).toMatchObject({ firstName: 'Mara', lastName: 'Maric' });
     });
 
     it('does not allow changing the email or the role', async () => {
       const { user, token } = await createUserWithToken(ctx, { email: 'ana@test.com' });
-      await http(ctx).patch('/me').set(auth(token)).send({ firstName: 'Ana', email: 'hacker@test.com', role: 'PROFESSOR' });
+      await http(ctx).patch('/me/updateProfile').set(auth(token)).send({ firstName: 'Ana', email: 'hacker@test.com', role: 'PROFESSOR' });
       const after = await ctx.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
       expect(after.email).toBe('ana@test.com');
       expect(after.role).toBe('STUDENT');
@@ -35,14 +35,14 @@ describe('Users / profile', () => {
 
     it('rejects invalid names and missing token', async () => {
       const { token } = await createUserWithToken(ctx);
-      await http(ctx).patch('/me').set(auth(token)).send({ firstName: 'A' }).expect(400);
-      await http(ctx).patch('/me').send({ firstName: 'Mara' }).expect(401);
+      await http(ctx).patch('/me/updateProfile').set(auth(token)).send({ firstName: 'A' }).expect(400);
+      await http(ctx).patch('/me/updateProfile').send({ firstName: 'Mara' }).expect(401);
     });
   });
 
-  describe('PATCH /me/password', () => {
+  describe('PATCH /me/changePassword', () => {
     const change = (token: string, body: Record<string, string>) =>
-      http(ctx).patch('/me/password').set(auth(token)).send(body);
+      http(ctx).patch('/me/changePassword').set(auth(token)).send(body);
 
     it('changes the password', async () => {
       const { user, token } = await createUserWithToken(ctx);
@@ -71,11 +71,11 @@ describe('Users / profile', () => {
     });
 
     it('needs a token', async () => {
-      await http(ctx).patch('/me/password').send({}).expect(401);
+      await http(ctx).patch('/me/changePassword').send({}).expect(401);
     });
   });
 
-  describe('GET /me/bookings', () => {
+  describe('GET /me/getBookings', () => {
     it('splits upcoming and past, and only returns my own', async () => {
       const { user, token } = await createUserWithToken(ctx);
       const other = await createUserWithToken(ctx);
@@ -88,7 +88,7 @@ describe('Users / profile', () => {
       await makeBooking(ctx, { studentId: other.user.id, start: new Date(Date.now() + 3 * DAY) });
 
       const ids = async (when?: string) => {
-        const res = await http(ctx).get(`/me/bookings${when ? `?when=${when}` : ''}`).set(auth(token)).expect(200);
+        const res = await http(ctx).get(`/me/getBookings${when ? `?when=${when}` : ''}`).set(auth(token)).expect(200);
         return res.body.map((b: { id: number }) => b.id).sort();
       };
 
@@ -99,7 +99,7 @@ describe('Users / profile', () => {
     });
 
     it('needs a token', async () => {
-      await http(ctx).get('/me/bookings').expect(401);
+      await http(ctx).get('/me/getBookings').expect(401);
     });
   });
 

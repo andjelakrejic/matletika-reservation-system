@@ -3,6 +3,7 @@ import {
   TestCtx, auth, bookingBody, createTestApp, createUserWithToken, futureDay, http, makeBooking, resetDb,
   setWorkingHours,
 } from './helpers.js';
+import { PRICE_PER_HOUR, CANCEL_DEADLINE_MS } from '../src/config.js';
 
 type Slot = { hour: string; free: number };
 
@@ -41,7 +42,7 @@ describe('Bookings', () => {
     it('creates a pending 1h booking with the right price and end time', async () => {
       const res = await book(student.token, bookingBody(day, '17:00', 1)).expect(201);
       expect(res.body).toMatchObject({
-        status: 'PENDING', hours: 1, price: 500, studentId: student.user.id,
+        status: 'PENDING', hours: 1, price: PRICE_PER_HOUR, studentId: student.user.id,
         schoolLevel: 'PRIMARY', grade: 7, topics: ['fractions'], createdBy: 'STUDENT',
       });
       expect(new Date(res.body.endAt).getTime() - new Date(res.body.startAt).getTime()).toBe(3_600_000);
@@ -49,7 +50,7 @@ describe('Bookings', () => {
 
     it('creates a 2h booking priced at 1000', async () => {
       const res = await book(student.token, bookingBody(day, '17:00', 2)).expect(201);
-      expect(res.body.price).toBe(1000);
+      expect(res.body.price).toBe(2 * PRICE_PER_HOUR);
       expect(new Date(res.body.endAt).getTime() - new Date(res.body.startAt).getTime()).toBe(7_200_000);
     });
 
@@ -249,15 +250,15 @@ describe('Bookings', () => {
       expect(await freeAt('17:00')).toBe(3);
     });
 
-    it('rejects a student cancelling less than 2h before the start', async () => {
-      const soon = await makeBooking(ctx, { studentId: student.user.id, start: new Date(Date.now() + HOUR) });
+    it('rejects a student cancelling inside the deadline', async () => {
+      const soon = await makeBooking(ctx, { studentId: student.user.id, start: new Date(Date.now() + CANCEL_DEADLINE_MS - 5 * 60_000), });
       await cancel(student.token, soon.id).expect(403);
       expect((await ctx.prisma.booking.findUniqueOrThrow({ where: { id: soon.id } })).status).toBe('CONFIRMED');
     });
 
     it('allows a student to cancel just outside the 2h window', async () => {
       const later = await makeBooking(ctx, {
-        studentId: student.user.id, start: new Date(Date.now() + 2 * HOUR + 5 * 60_000),
+        studentId: student.user.id, start: new Date(Date.now() + CANCEL_DEADLINE_MS + 5 * 60_000),      
       });
       await cancel(student.token, later.id).expect(200);
     });

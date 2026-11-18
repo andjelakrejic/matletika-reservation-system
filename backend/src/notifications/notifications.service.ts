@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 
 
-const EXPO_PUSH_URL = 'https://expo-host/---/api/v2/push/send';
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 type PushTicket = {
     status: string;
     message?: string;

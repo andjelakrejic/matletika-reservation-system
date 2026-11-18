@@ -4,6 +4,7 @@ import {
   TestCtx, auth, bookingBody, createTestApp, createUserWithToken, futureDay, http, makeBooking, resetDb,
   setWorkingHours,
 } from './helpers.js';
+import { PRICE_PER_HOUR, CANCEL_DEADLINE_MS } from '../src/config.js';
 
 describe('Admin (professor)', () => {
   let ctx: TestCtx;
@@ -36,10 +37,10 @@ describe('Admin (professor)', () => {
 
   describe('access control', () => {
     const routes: [string, string][] = [
-      ['get', '/admin/bookings'],
-      ['patch', '/admin/bookings/1'],
-      ['post', '/admin/bookings'],
-      ['get', '/admin/schedule?date=2030-01-07'],
+      ['get', '/admin/getAllBookings'],
+      ['patch', '/admin/setBookingStatus/1'],
+      ['post', '/admin/createManualBooking'],
+      ['get', '/admin/getSchedule?date=2030-01-07'],
       ['get', '/admin/availability'],
       ['put', '/admin/availability'],
       ['get', '/admin/time-off'],
@@ -56,10 +57,10 @@ describe('Admin (professor)', () => {
     });
   });
 
-  describe('GET /admin/bookings', () => {
+  describe('GET /admin/getAllBookings', () => {
     it('lists pending requests with the student', async () => {
       await studentBooks('17:00');
-      const res = await asProf.get('/admin/bookings?status=PENDING').expect(200);
+      const res = await asProf.get('/admin/getAllBookings?status=PENDING').expect(200);
       expect(res.body).toHaveLength(1);
       expect(res.body[0]).toMatchObject({ status: 'PENDING', hours: 1 });
       expect(res.body[0].student).toMatchObject({ firstName: 'Ana', lastName: 'Anic' });
@@ -71,60 +72,60 @@ describe('Admin (professor)', () => {
       await makeBooking(ctx, { studentId: student.user.id, start: day.at('17:00').toJSDate(), status: 'CONFIRMED' });
       await makeBooking(ctx, { studentId: student.user.id, start: day.at('18:00').toJSDate(), status: 'CANCELLED' });
 
-      expect((await asProf.get('/admin/bookings?status=CONFIRMED').expect(200)).body).toHaveLength(1);
-      expect((await asProf.get('/admin/bookings?status=CANCELLED').expect(200)).body).toHaveLength(1);
-      expect((await asProf.get('/admin/bookings').expect(200)).body).toHaveLength(3);
+      expect((await asProf.get('/admin/getAllBookings?status=CONFIRMED').expect(200)).body).toHaveLength(1);
+      expect((await asProf.get('/admin/getAllBookings?status=CANCELLED').expect(200)).body).toHaveLength(1);
+      expect((await asProf.get('/admin/getAllBookings').expect(200)).body).toHaveLength(3);
     });
 
     it('rejects an unknown status', async () => {
-      await asProf.get('/admin/bookings?status=NOPE').expect(400);
+      await asProf.get('/admin/getAllBookings?status=NOPE').expect(400);
     });
   });
 
-  describe('PATCH /admin/bookings/:id', () => {
+  describe('PATCH /admin/setBookingStatus/:id', () => {
     it('confirms a pending booking', async () => {
       const created = await studentBooks('17:00');
-      const res = await asProf.patch(`/admin/bookings/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(200);
+      const res = await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(200);
       expect(res.body.status).toBe('CONFIRMED');
     });
 
     it('rejects a pending booking and frees the seat', async () => {
       const created = await studentBooks('17:00');
-      const res = await asProf.patch(`/admin/bookings/${created.body.id}`).send({ status: 'CANCELLED' }).expect(200);
+      const res = await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({ status: 'CANCELLED' }).expect(200);
       expect(res.body.status).toBe('CANCELLED');
     });
 
     it('only confirms bookings that are pending', async () => {
       const created = await studentBooks('17:00');
-      await asProf.patch(`/admin/bookings/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(200);
-      await asProf.patch(`/admin/bookings/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(400);
+      await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(200);
+      await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(400);
 
       const cancelled = await makeBooking(ctx, { studentId: student.user.id, start: day.at('19:00').toJSDate(), status: 'CANCELLED' });
-      await asProf.patch(`/admin/bookings/${cancelled.id}`).send({ status: 'CONFIRMED' }).expect(400);
+      await asProf.patch(`/admin/setBookingStatus/${cancelled.id}`).send({ status: 'CONFIRMED' }).expect(400);
     });
 
     it('does not expose the student push token', async () => {
       const created = await studentBooks('17:00');
-      const res = await asProf.patch(`/admin/bookings/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(200);
+      const res = await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({ status: 'CONFIRMED' }).expect(200);
       expect(res.body.student).toBeUndefined();
     });
 
     it('rejects invalid statuses and unknown bookings', async () => {
       const created = await studentBooks('17:00');
-      await asProf.patch(`/admin/bookings/${created.body.id}`).send({ status: 'PENDING' }).expect(400);
-      await asProf.patch(`/admin/bookings/${created.body.id}`).send({}).expect(400);
-      await asProf.patch('/admin/bookings/999999').send({ status: 'CONFIRMED' }).expect(404);
+      await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({ status: 'PENDING' }).expect(400);
+      await asProf.patch(`/admin/setBookingStatus/${created.body.id}`).send({}).expect(400);
+      await asProf.patch('/admin/setBookingStatus/999999').send({ status: 'CONFIRMED' }).expect(404);
     });
   });
 
-  describe('POST /admin/bookings (manual entry)', () => {
+  describe('POST /admin/createManualBooking (manual entry)', () => {
     const manual = (body: Record<string, unknown>) =>
-      asProf.post('/admin/bookings').send({ startAt: day.iso('17:00'), hours: 1, ...body });
+      asProf.post('/admin/createManualBooking').send({ startAt: day.iso('17:00'), hours: 1, ...body });
 
     it('adds a guest without an account as confirmed', async () => {
       const res = await manual({ guestName: 'Marko' }).expect(201);
       expect(res.body).toMatchObject({
-        guestName: 'Marko', studentId: null, status: 'CONFIRMED', createdBy: 'PROFESSOR', price: 500,
+        guestName: 'Marko', studentId: null, status: 'CONFIRMED', createdBy: 'PROFESSOR', price: PRICE_PER_HOUR,
       });
     });
 
@@ -133,7 +134,7 @@ describe('Admin (professor)', () => {
         studentId: student.user.id, hours: 2, schoolLevel: 'SECONDARY', grade: 2, topics: ['functions'],
       }).expect(201);
       expect(res.body).toMatchObject({
-        studentId: student.user.id, status: 'CONFIRMED', price: 1000, grade: 2, topics: ['functions'],
+        studentId: student.user.id, status: 'CONFIRMED', price: PRICE_PER_HOUR * 2, grade: 2, topics: ['functions'],
       });
     });
 
@@ -162,13 +163,13 @@ describe('Admin (professor)', () => {
     });
   });
 
-  describe('GET /admin/schedule', () => {
+  describe('GET /admin/getSchedule', () => {
     it('lists who comes in each half-hour block', async () => {
       await studentBooks('17:00', 1);
-      await asProf.post('/admin/bookings').send({ startAt: day.iso('17:00'), hours: 1, guestName: 'Marko' }).expect(201);
+      await asProf.post('/admin/createManualBooking').send({ startAt: day.iso('17:00'), hours: 1, guestName: 'Marko' }).expect(201);
       await makeBooking(ctx, { studentId: student.user.id, start: day.at('19:00').toJSDate(), status: 'CANCELLED' });
 
-      const res = await asProf.get(`/admin/schedule?date=${day.date}`).expect(200);
+      const res = await asProf.get(`/admin/getSchedule?date=${day.date}`).expect(200);
       const blocks: { hour: string; entries: { name: string; status: string; grade: number; topics: string[] }[] }[] = res.body;
 
       expect(blocks.map((b) => b.hour)).toEqual(['17:00', '17:30']); // both cover 17:00-18:00
@@ -179,11 +180,11 @@ describe('Admin (professor)', () => {
     });
 
     it('returns an empty list for a day without bookings', async () => {
-      expect((await asProf.get(`/admin/schedule?date=${day.date}`).expect(200)).body).toEqual([]);
+      expect((await asProf.get(`/admin/getSchedule?date=${day.date}`).expect(200)).body).toEqual([]);
     });
 
     it('rejects an invalid date', async () => {
-      await asProf.get('/admin/schedule?date=garbage').expect(400);
+      await asProf.get('/admin/getSchedule?date=garbage').expect(400);
     });
   });
 
