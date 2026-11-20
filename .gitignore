@@ -49,3 +49,14 @@ example
 
 # backend
 backend/src/generated
+
+*.drawio
+PLAN.md
+
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+test-output.txt
+*.tsbuildinfo
