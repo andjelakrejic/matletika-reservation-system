@@ -49,6 +49,7 @@ example
 
 # backend
 backend/src/generated
+backend/test-output.txt
 
 *.drawio
 PLAN.md
@@ -60,3 +61,4 @@ dist/
 !.env.example
 test-output.txt
 *.tsbuildinfo
+
