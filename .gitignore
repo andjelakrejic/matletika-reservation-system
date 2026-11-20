@@ -51,7 +51,7 @@ example
 backend/src/generated
 backend/test-output.txt
 
-*.drawio
+Matletika.drawio
 PLAN.md
 
 node_modules/
