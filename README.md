@@ -1,84 +1,196 @@
-# Matletika Reservation API
+# Matletika — Reservation API
 
-REST API for a mobile app (React Native / Expo) that lets students book math practice sessions in a classroom. The professor is present during the session, so students can ask questions. The professor confirms or rejects each request manually.
+Backend for **Matletika**, a math-practice booking application. Students can browse available classroom sessions and request a place, while the professor manages reservations, working hours and time off. Sessions take place in a shared classroom, with up to three students at the same time.
 
-> Work in progress. See [Status](#status).
+> **Project status:** Backend MVP implemented; integration testing and mobile-app integration are ongoing.
 
 ## Tech stack
 
-- **NestJS** (TypeScript), REST API
-- **PostgreSQL** (Neon) with **Prisma 7**
-- **JWT** authentication, **bcrypt** password hashing, **class-validator** for input validation
-- **luxon** for time zones (stored in UTC, displayed in `Europe/Belgrade`)
-- **Vitest** for unit and e2e tests
+- **NestJS**, **TypeScript** — REST API
+- **PostgreSQL** (Neon), **Prisma** — persistence and database access
+- **JWT**, **Passport**, **bcrypt** — authentication and password security
+- **class-validator**, **class-transformer** — request validation
+- **Luxon** — date and time handling (`Europe/Belgrade`)
+- **Nodemailer** — password-reset emails
+- **Expo Push API** — mobile push notifications
 
-## Key features
+## Features
 
-- Role-based access (`STUDENT`, `PROFESSOR`) with guards
-- Availability computed on the fly (working hours minus time off, minus active bookings per 30-minute block, capacity 3)
-- Booking rules enforced server-side: 1h or 2h sessions, starts at :00 or :30, max 2h per student per day, no overlapping bookings, cancellation allowed up to 6h before the session
-- Students only see the number of free seats, never other students' names
-- Booking lifecycle: `PENDING` → `CONFIRMED` / `CANCELLED`
-- Forgotten-password flow
-- Email-based password reset
-- Push notifications (Expo)
+### Student
 
+- Register, log in and manage a profile
+- Reset a forgotten password using a six-digit, time-limited email code
+- View available times and remaining seats without seeing other students' details
+- Book a **1- or 2-hour** session, choose school level and grade, and specify practice topics
+- View upcoming, past or all personal reservations
+- Cancel a reservation at least **6 hours** before the start
+- Register or remove an Expo push token for notifications
+- Delete an account after password confirmation
 
-## API overview
+### Professor
 
-| Route | Access | Description |
-|---|---|---|
-| `POST /auth/register`, `POST /auth/login` | public | Returns `{ token, user }` |
-| `GET /me`, `PATCH /me/updateProfile`, `PATCH /me/changePassword` | authenticated | Profile management |
-| `GET /me/getBookings?when=upcoming\|past\|all` | authenticated | My bookings |
-| `GET /slots?date=YYYY-MM-DD` | authenticated | Bookable start times with free seats |
-| `POST /bookings`, `DELETE /bookings/:id` | authenticated | Create / cancel a booking |
-| `GET /admin/getAllBookings`, `PATCH /admin/setBookingStatus/:id` | professor | Review requests |
-| `POST /admin/createManualBooking`, `GET /admin/getSchedule` | professor | Manual entry, daily schedule |
+- View all booking requests, filter by status and inspect a daily schedule
+- Confirm or cancel bookings
+- Create a manual booking for an existing student or guest
+- Configure recurring weekly working hours
+- Add or remove time-off periods
+- Notify students when a reservation is confirmed or cancelled (when a push token is available)
 
-Protected routes require `Authorization: Bearer <jwt>`.
+### Booking rules
+
+| Rule | Implementation |
+| --- | --- |
+| Capacity | Maximum **3** students in each overlapping 30-minute block |
+| Duration | **1 or 2 hours** |
+| Student booking start | On the hour or half-hour (`:00` / `:30`) |
+| Daily limit | Maximum **2 hours** per student |
+| Overlapping reservations | Prevented for the same student |
+| Cancellation | Students must cancel at least **6 hours** before the session; professor can cancel independently |
+| Initial status | Student requests are `PENDING`; manual professor bookings are `CONFIRMED` |
+| Availability | Calculated from weekly working hours, time off and non-cancelled reservations |
+| Price | **1,000 RSD/hour**, configured in `src/config.ts` |
+
+Student booking creation rechecks working hours, student booking limits and classroom capacity inside a PostgreSQL transaction protected by a day-based advisory lock. Concurrent changes to working hours or time off still require coordinated locking to eliminate all race conditions.
+
+## API endpoints
+
+All routes except authentication require `Authorization: Bearer <token>`.
+
+### Authentication — public
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/auth/register` | Register a student |
+| `POST` | `/auth/login` | Log in; receive a JWT and user details |
+| `POST` | `/auth/forgot-password` | Request a password-reset code by email |
+| `POST` | `/auth/reset-password` | Reset password with the received code |
+
+### Student / authenticated account
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/me` | Current user profile |
+| `PATCH` | `/me/updateProfile` | Update first and/or last name |
+| `PATCH` | `/me/changePassword` | Change password |
+| `DELETE` | `/me` | Delete student account (requires password) |
+| `GET` | `/me/getBookings?when=upcoming\|past\|all` | View own bookings |
+| `POST` | `/me/push-token` | Save Expo push token |
+| `DELETE` | `/me/push-token` | Remove Expo push token |
+| `GET` | `/slots?date=YYYY-MM-DD` | View availability for a date |
+| `POST` | `/bookings` | Request a reservation |
+| `DELETE` | `/bookings/:id` | Cancel a reservation |
+
+### Professor only — `PROFESSOR` role
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/admin/getAllBookings?status=PENDING` | View bookings; optional status filter |
+| `PATCH` | `/admin/setBookingStatus/:id` | Confirm or cancel a booking |
+| `POST` | `/admin/createManualBooking` | Create a booking for a student or guest |
+| `GET` | `/admin/getSchedule?date=YYYY-MM-DD` | View daily schedule |
+| `GET` | `/admin/availability` | Get weekly working hours |
+| `PUT` | `/admin/availability` | Replace weekly working hours |
+| `GET` | `/admin/time-off` | List upcoming time-off periods |
+| `POST` | `/admin/time-off` | Add a time-off period |
+| `DELETE` | `/admin/time-off/:id` | Remove a time-off period |
+
+### Example: create a booking
+
+```http
+POST /bookings
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "startAt": "2026-12-01T16:00:00+01:00",
+  "hours": 1,
+  "schoolLevel": "SECONDARY",
+  "grade": 2,
+  "topics": ["Quadratic equations"],
+  "note": "Practice for an upcoming test"
+}
+```
+
+A successful request creates a booking with an initial status of `PENDING`. The professor can subsequently confirm or cancel it.
+
+### Example: available slots
+
+```http
+GET /slots?date=2026-12-01
+Authorization: Bearer <token>
+```
+
+Each returned slot includes `hour` (Belgrade local time), `startAt` (UTC ISO timestamp), `free`, `capacity` and `maxHours`. A `maxHours` value of `0` means a full 1-hour session cannot start at that time.
 
 ## Getting started
 
-Requirements: Node 20+, a PostgreSQL database.
+**Prerequisites:** Node.js, npm and a PostgreSQL database.
 
-```bash
-npm install
-cp .env.example .env        # fill in DATABASE_URL and JWT_SECRET
-npx prisma migrate dev
-npx prisma generate
-npm run start:dev           # http://localhost:3000
-```
+1. Install dependencies from the backend project root:
 
-## Tests
+   ```bash
+   npm install
+   ```
 
-```bash
-npm run test
-npm run test:e2e
-```
+2. Configure your environment variables in `.env` (see the project's environment template, if present):
 
-## Status
+   ```dotenv
+   DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require"
+   JWT_SECRET="replace-with-a-long-random-secret"
 
-**Done:** project setup, auth (register, login, JWT, guards), profile endpoints, forgotten-password flow, `GET /slots`
+   # For password-reset emails (optional in local development)
+   SMTP_HOST=""
+   SMTP_PORT="587"
+   SMTP_USER=""
+   SMTP_PASS=""
+   MAIL_FROM=""
+   ```
 
-**In progress:** booking creation/cancellation, professor endpoints, push notifications and reminders
+3. Apply the Prisma database schema and generate the client using the migrations/configuration provided by the full repository:
 
-**Planned:** working hours and time-off management, account deletion, seed data, deployment
+   ```bash
+   npx prisma migrate dev
+   npx prisma generate
+   ```
+
+4. Start the development server:
+
+   ```bash
+   npm run start:dev
+   ```
+
+   Default address: `http://localhost:3000`.
+
+> **Repository note:** The source-code archive reviewed for this README contained `src/` only. Check the full repository for `package.json`, Prisma schema/migrations and environment templates before following these commands. When SMTP is not configured, the current development implementation logs reset codes instead of sending an email.
 
 ## Project structure
 
-```
+```text
 src/
-  admin/          # professor endpoints
-  auth/           # register, login, JWT, forgotten password
-  bookings/       # create / cancel bookings
-  mail/           # transactional emails (password reset)
-  middleware/
-  notifications/  # push notifications
-  slots/          # availability calculation
-  users/          # profile
-  prisma/         # PrismaService
-  config.ts       # capacity, price, limits, time zone
+├── admin/           # Professor dashboard, schedule, working hours and time off
+├── auth/            # Registration, login, JWT and password reset
+├── bookings/        # Booking creation, cancellation and validation
+├── generated/       # Generated Prisma client
+├── mail/            # Transactional email service
+├── notifications/   # Expo push delivery and reminder job
+├── prisma/          # PrismaService and module
+├── slots/           # Availability calculation
+├── users/           # Profiles, personal bookings and account management
+├── app.module.ts    # Root NestJS module
+├── config.ts        # Booking limits, capacity, pricing and time zone
+└── main.ts          # Application bootstrap
 ```
 
-The mobile app lives in `frontend/` (React Native + Expo).
+## Current status and next steps
+
+**Implemented in the reviewed backend source:** authentication and password reset; account management; slot calculation; booking creation and cancellation; professor booking management; weekly availability and time-off management; Expo push sending and reminder-job code.
+
+**Still to verify or finish:** automated and end-to-end tests; end-to-end push-notification delivery and scheduled reminder execution; frontend integration; deployment and production configuration.
+
+> **Implementation note:** `ScheduleModule.forRoot()` is registered for scheduled reminders, but actual reminder delivery has not been verified end to end. Both student and manual professor bookings support starts at `:00` and `:30`. Manual bookings for registered students should still be checked against the same per-student overlap and daily-hour limits as student-created bookings.
+
+## Mobile application
+
+The API is designed for a **React Native / Expo** mobile client with separate student and professor experiences. The mobile frontend is being developed alongside the backend.

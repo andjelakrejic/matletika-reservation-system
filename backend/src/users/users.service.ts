@@ -47,21 +47,29 @@ export class UsersService {
         return { ok: true };
     }
 
-    getBookings(userId: number, when: 'upcoming' | 'past' | 'all') {
+    async getBookings(userId: number, when: 'upcoming' | 'past' | 'all') {
+        if (!['upcoming', 'past', 'all'].includes(when)) {
+            throw new BadRequestException('Invalid when parameter. Allowed values: upcoming, past, all');
+        }
+
         const now = new Date();
+
         const where =
-            when === 'upcoming'? { 
-                studentId: userId, startAt: { gte: now }, status: { not: 'CANCELLED' as const } 
-            }
-            : when === 'past' ? { 
-                studentId: userId, OR: [{ startAt: { lt: now } }, { status: 'CANCELLED' as const }] 
-            }
+            when === 'upcoming'
+                ? { studentId: userId, endAt: { gt: now }, status: { not: 'CANCELLED' as const }}
+            : when === 'past'
+                ? {studentId: userId, OR: 
+                    [
+                        { endAt: { lte: now } },
+                        { status: 'CANCELLED' as const },
+                    ],
+                }
             : { studentId: userId };
 
         return this.prisma.booking.findMany({
             where,
-            orderBy: { 
-                startAt: when === 'upcoming' ? 'asc' : 'desc' 
+            orderBy: {
+                startAt: when === 'upcoming' ? 'asc' : 'desc',
             },
         });
     }

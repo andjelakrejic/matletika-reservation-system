@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
+import { IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -21,4 +21,9 @@ export class DeleteAccountDto {
 
 export class PushTokenDto {
     @Matches(/^Expo(nent)?PushToken\[.+\]$/) token!: string;
+}
+
+export class GetBookingsQueryDto {
+    @IsOptional()
+    @IsIn(['upcoming', 'past', 'all']) when: 'upcoming' | 'past' | 'all' = 'upcoming';
 }

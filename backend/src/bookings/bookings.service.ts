@@ -28,53 +28,94 @@ export class BookingsService {
         }
     }
 
+    private async assertWorkingHours(tx: Prisma.TransactionClient, start: DateTime, hours: number) {
+        const toMin = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + m;
+        };
+        const startMin = start.hour * 60 + start.minute;
+        const endMin = startMin + hours * 60;
+        const end = start.plus({ hours });
+
+        // luxon: 1 = ponedeljak ... 7 = nedelja; u bazi 0 = nedelja
+        const windows = await tx.availability.findMany({ where: { weekday: start.weekday % 7 } });
+        const inside = windows.some(
+            (w) => startMin >= toMin(w.startTime) && endMin <= toMin(w.endTime),
+        );
+        if (!inside) throw new BadRequestException('Outside working hours');
+
+        const timeOff = await tx.timeOff.findFirst({
+            where: { startAt: { lt: end.toJSDate() }, endAt: { gt: start.toJSDate() } },
+        });
+        if (timeOff) throw new BadRequestException('Professor is off at that time');
+    }
+
+    private async assertStudentLimits(tx: Prisma.TransactionClient, studentId: number, start: DateTime, hours: number) {
+        const end = start.plus({ hours });
+        const active = { studentId, status: { not: 'CANCELLED' as const } };
+
+        // 1. preklapanje sa njegovom drugom rezervacijom
+        const overlap = await tx.booking.findFirst({
+            where: {
+                ...active,
+                startAt: { lt: end.toJSDate() },
+                endAt: { gt: start.toJSDate() },
+            },
+        });
+        if (overlap) throw new ConflictException('Student already has a booking at that time');
+
+        // 2. dnevni limit (dan po Europe/Belgrade)
+        const dayStart = start.startOf('day');
+        const dayEnd = dayStart.plus({ days: 1 });
+        const { _sum } = await tx.booking.aggregate({
+            _sum: { hours: true },
+            where: {
+                ...active,
+                startAt: { gte: dayStart.toJSDate(), lt: dayEnd.toJSDate() },
+            },
+        });
+
+        if ((_sum.hours ?? 0) + hours > MAX_HOURS_PER_DAY)
+            throw new ConflictException(`Maximum is ${MAX_HOURS_PER_DAY}h per day`);
+    }
+
     async create(userId: number, dto: CreateBookingDto) {
         const start = DateTime.fromISO(dto.startAt, { zone: TIMEZONE });
 
-        // ovo treba u frontu da se ne omoguci
-        if (!start.isValid || ![0, 30].includes(start.minute) || start.second !== 0)
-            throw new BadRequestException('The reservation has to start in the full hour or half hour.');
+        if (
+            !start.isValid ||
+            ![0, 30].includes(start.minute) ||
+            start.second !== 0 ||
+            start.millisecond !== 0
+        )
+            throw new BadRequestException('The reservation has to start on the full hour or half hour.');
+        if (start < DateTime.now())
+            throw new BadRequestException('Cannot book in the past.');
         if (dto.schoolLevel === 'SECONDARY' && dto.grade > 4)
             throw new BadRequestException('Secondary school has grades 1-4');
 
-        const offered = new Set((await this.slots.forDate(start.toFormat('yyyy-MM-dd'))).map((s) => s.startAt));
+        // rana provera protiv ponuđenih termina (može da zastari, zato se radno vreme i kapacitet proveravaju opet u transakciji)
+        const offered = new Set(
+            (await this.slots.forDate(start.toFormat('yyyy-MM-dd'))).map((s) => s.startAt),
+        );
         for (let i = 0; i < dto.hours * 2; i++) {
-        if (!offered.has(start.plus({ minutes: SLOT_MINUTES * i }).toUTC().toISO()!))
+            if (!offered.has(start.plus({ minutes: SLOT_MINUTES * i }).toUTC().toISO()!))
             throw new BadRequestException('Slot is not available');
         }
 
         const end = start.plus({ hours: dto.hours });
-        const dayStart = start.startOf('day');
-        const dayEnd = dayStart.plus({ days: 1 });
-        const lockKey = Math.floor(dayStart.toMillis() / 86_400_000);
+        const lockKey = Math.floor(start.startOf('day').toMillis() / 86_400_000);
 
         return this.prisma.$transaction(async (tx) => {
             // jedna rezervacija po danu istovremeno, da dvoje ne uzmu poslednje mesto
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
 
+            await this.assertWorkingHours(tx, start, dto.hours);
+            await this.assertStudentLimits(tx, userId, start, dto.hours);
             await this.assertCapacity(tx, start, dto.hours);
-            const overlapping = await tx.booking.count({
-                where: {
-                studentId: userId,
-                status: { not: 'CANCELLED' },
-                startAt: { lt: end.toJSDate() },
-                endAt: { gt: start.toJSDate() },
-                },
-            });
-            if (overlapping > 0) throw new ConflictException('You already have a reservation at this time.');
 
-            const agg = await tx.booking.aggregate({
-                _sum: { hours: true },
-                where: {
-                studentId: userId,
-                status: { not: 'CANCELLED' },
-                startAt: { gte: dayStart.toJSDate(), lt: dayEnd.toJSDate() },
-                },
-            });
-            if ((agg._sum.hours ?? 0) + dto.hours > MAX_HOURS_PER_DAY)
-                throw new ConflictException(`Maximum is ${MAX_HOURS_PER_DAY}h per day.`);   
             return tx.booking.create({
-                data: {
+            data: {
                 studentId: userId,
                 startAt: start.toJSDate(),
                 endAt: end.toJSDate(),
@@ -85,7 +126,7 @@ export class BookingsService {
                 topics: dto.topics,
                 note: dto.note,
                 createdBy: 'STUDENT',
-                },
+            },
             });
         });
     }
@@ -107,7 +148,7 @@ export class BookingsService {
             include: { student: { select: { id: true, pushToken: true } } },
         });
 
-        // Tell the student when the professor cancelled their booking
+        // Obavestava se student kad profseor otkaze termin
         if (user.role === 'PROFESSOR' && student) {
             const when = DateTime.fromJSDate(updated.startAt, { zone: TIMEZONE }).toFormat('dd.MM. HH:mm');
             await this.notifications.send(student, 'Booking cancelled', when, { bookingId });
@@ -122,12 +163,14 @@ export class BookingsService {
             throw new BadRequestException('This student does not exist');
 
         const start = DateTime.fromISO(dto.startAt, { zone: TIMEZONE });
-        if (!start.isValid || start.minute !== 0 || start.second !== 0)
-            throw new BadRequestException('Termin mora počinjati na pun sat'); // pazi - sad je na pola sata
+        if (!start.isValid || ![0, 30].includes(start.minute) || start.second !== 0 || start.millisecond !== 0)
+            throw new BadRequestException('The reservation must begin on the hour or half hour');
         const lockKey = Math.floor(start.startOf('day').toMillis() / 86_400_000);
 
         return this.prisma.$transaction(async (tx) => {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
+            await this.assertWorkingHours(tx, start, dto.hours);
+            if (dto.studentId) await this.assertStudentLimits(tx, dto.studentId, start, dto.hours);
             await this.assertCapacity(tx, start, dto.hours);
             return tx.booking.create({
             data: {

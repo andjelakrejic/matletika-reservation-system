@@ -9,6 +9,7 @@ import { SlotsModule } from './slots/slots.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
     BookingsModule,
     AdminModule,
     NotificationsModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

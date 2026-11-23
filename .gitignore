@@ -62,3 +62,4 @@ dist/
 test-output.txt
 *.tsbuildinfo
 
+frontend/

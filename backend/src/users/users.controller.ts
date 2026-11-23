@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards.js";
 import { UsersService } from "./users.service.js";
-import { ChangePasswordDto, DeleteAccountDto, PushTokenDto, UpdateProfileDto } from "./dto.js";
+import { ChangePasswordDto, DeleteAccountDto, GetBookingsQueryDto, PushTokenDto, UpdateProfileDto } from "./dto.js";
 
 @UseGuards(JwtAuthGuard)
 @Controller('me')
@@ -25,8 +25,8 @@ export class UsersController {
     }
 
     @Get('getBookings')
-    getBookings(@Req() req: any, @Query('when') when: 'upcoming' | 'past' | 'all' = 'all') {
-        return this.users.getBookings(req.user.id, when);
+    getBookings(@Req() req: any,  @Query() query: GetBookingsQueryDto) {
+        return this.users.getBookings(req.user.id, query.when);
     }
 
     @Delete()

@@ -24,10 +24,14 @@ export class AdminService {
   }
 
   async setBookingStatus(id: number, status: 'CONFIRMED' | 'CANCELLED') {
-     const booking = await this.prisma.booking.findUnique({ where: { id } });
+    const booking = await this.prisma.booking.findUnique({ where: { id } });
     if (!booking) throw new NotFoundException('Booking not found');
+    
     if (status === 'CONFIRMED' && booking.status !== 'PENDING')
       throw new BadRequestException('Only a pending booking can be confirmed');
+
+    if (booking.status === 'CANCELLED')
+      throw new BadRequestException('Booking is already cancelled');
 
     const { student, ...updated } = await this.prisma.booking.update({
       where: { id },
