@@ -163,7 +163,7 @@ Each returned slot includes `hour` (Belgrade local time), `startAt` (UTC ISO tim
 
    Default address: `http://localhost:3000`.
 
-> **Repository note:** The source-code archive reviewed for this README contained `src/` only. Check the full repository for `package.json`, Prisma schema/migrations and environment templates before following these commands. When SMTP is not configured, the current development implementation logs reset codes instead of sending an email.
+> **Repository note:** When SMTP is not configured, the current development implementation logs reset codes instead of sending an email.
 
 ## Project structure
 
@@ -188,8 +188,6 @@ src/
 **Implemented in the reviewed backend source:** authentication and password reset; account management; slot calculation; booking creation and cancellation; professor booking management; weekly availability and time-off management; Expo push sending and reminder-job code.
 
 **Still to verify or finish:** automated and end-to-end tests; end-to-end push-notification delivery and scheduled reminder execution; frontend integration; deployment and production configuration.
-
-> **Implementation note:** `ScheduleModule.forRoot()` is registered for scheduled reminders, but actual reminder delivery has not been verified end to end. Both student and manual professor bookings support starts at `:00` and `:30`. Manual bookings for registered students should still be checked against the same per-student overlap and daily-hour limits as student-created bookings.
 
 ## Mobile application
 
